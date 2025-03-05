@@ -6,6 +6,10 @@ CURR_TOPK=500
 CURR_QUERY=150
 
 # TRAIN
+set CURR_DBSCAN 0.95
+set CURR_TOPK 500
+set CURR_QUERY 150
+
 python main_instance_segmentation.py \
 general.experiment_name="validation" \
 general.eval_on_segments=true \

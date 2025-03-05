@@ -8,6 +8,7 @@ from models.res16unet import (
     Res16UNet18D,
     Res16UNet18B,
     Custom30M,
+    Custom,
 )
 from models.mask3d import Mask3D
 

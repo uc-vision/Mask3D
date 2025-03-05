@@ -6,6 +6,11 @@ CURR_DBSCAN=0.6
 CURR_TOPK=-1
 CURR_QUERY=100
 
+set CURR_AREA 1
+set CURR_DBSCAN 0.6
+set CURR_TOPK -1
+set CURR_QUERY 100
+
 python main_instance_segmentation.py \
   general.project_name="s3dis" \
   general.experiment_name="area${CURR_AREA}_from_scratch" \
@@ -14,8 +19,20 @@ python main_instance_segmentation.py \
   general.num_targets=14 \
   data.num_labels=13 \
   trainer.max_epochs=1001 \
-  general.area=${CURR_AREA} \
+  general.area=$CURR_AREA \
   trainer.check_val_every_n_epoch=10
+
+python main_instance_segmentation.py \
+  general.project_name="s3dis" \
+  general.experiment_name="area1_from_scratch" \
+  data.batch_size=4 \
+  data/datasets=s3dis \
+  general.num_targets=14 \
+  data.num_labels=13 \
+  trainer.max_epochs=1001 \
+  general.area=1 \
+  trainer.check_val_every_n_epoch=10
+
 
 python main_instance_segmentation.py \
 general.project_name="s3dis_eval" \

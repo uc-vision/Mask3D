@@ -99,7 +99,7 @@ class SetCriterion(nn.Module):
 
     def __init__(
         self,
-        num_classes,
+        num_classes, # num_targets
         matcher,
         weight_dict,
         eos_coef,
@@ -145,23 +145,31 @@ class SetCriterion(nn.Module):
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
         """
         assert "pred_logits" in outputs
-        src_logits = outputs["pred_logits"].float()
+        src_logits = outputs["pred_logits"].float()  # [B, N, 19]
 
         idx = self._get_src_permutation_idx(indices)
+        # print("batch_idx: ", idx[0])
+        # print("src_idx: ", idx[1])
         target_classes_o = torch.cat(
             [t["labels"][J] for t, (_, J) in zip(targets, indices)]
         )
+
+        # print("target_classes_o.shape: ", target_classes_o.shape)
+        # print("target_classes_o: ", target_classes_o)
         target_classes = torch.full(
             src_logits.shape[:2],
             self.num_classes,
             dtype=torch.int64,
             device=src_logits.device,
         )
+
         target_classes[idx] = target_classes_o
+        # print("target_classes: ", target_classes)
+        # print(target_classes)
 
         loss_ce = F.cross_entropy(
-            src_logits.transpose(1, 2),
-            target_classes,
+            src_logits.transpose(1, 2), #[B, 19, N]
+            target_classes, #[B, N]
             self.empty_weight,
             ignore_index=253,
         )
@@ -287,6 +295,11 @@ class SetCriterion(nn.Module):
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets, mask_type)
+
+        # print("type(indices): ", type(indices))
+        # print("len(indices): ", len(indices))
+        # for i in range(len(indices)):
+        #     print(f"indices[{i}]: ", indices[i])
 
         # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_masks = sum(len(t["labels"]) for t in targets)

@@ -100,6 +100,7 @@ def test(cfg: DictConfig):
     runner.test(model)
 
 
+
 @hydra.main(
     config_path="conf", config_name="config_base_instance_segmentation.yaml"
 )

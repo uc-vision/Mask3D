@@ -1,0 +1,21 @@
+python main_instance_segmentation.py \
+general.project_name="s3dis" \
+general.experiment_name="s3dis_train" \
+data.batch_size=4 \
+data/datasets=s3dis \
+general.num_targets=14 \
+data.num_labels=13 \
+trainer.max_epochs=1001 \
+general.area=1 \
+trainer.check_val_every_n_epoch=5 \
+general.save_visualizations=true  
+
+
+
+
+rescaled_pca.shape:  (283363, 3)
+scaled_pca.shape after get_full_res_mask:  (1112933, 3) #3.92
+
+
+rescaled_pca.shape:  (289962, 3)
+scaled_pca.shape after get_full_res_mask:  (1136617, 3) #3.91

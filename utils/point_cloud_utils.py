@@ -6,6 +6,7 @@ import open3d
 from plyfile import PlyData, PlyElement
 
 
+
 def load_ply(filepath):
     with open(filepath, "rb") as f:
         plydata = PlyData.read(f)

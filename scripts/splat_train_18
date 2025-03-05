@@ -1,0 +1,21 @@
+python main_instance_segmentation.py \
+general.experiment_name="splat_train_18" \
+general.project_name="splat_train" \
+data/datasets=splat \
+general.num_targets=2 \
+data.num_labels=2 \
+data.voxel_size=0.003 \
+general.ignore_class_threshold=1 \
+trainer.max_epochs=30001 \
+trainer.check_val_every_n_epoch=50 \
+general.save_visualizations=true \
+general.eval_on_segments=false \
+general.train_on_segments=false \
+data.batch_size=10 \
+general.visualization_point_size=2 \
+optimizer.lr=0.0001 \
+data.cache_data=true \
+general.on_crops=true \
+data.cropping_v1=false \
+data.add_normals=true \
+data.in_channels=6

@@ -1,4 +1,4 @@
-name: mask3d_cuda113
+name: Mask3D
 channels:
   - anaconda
   - defaults
@@ -102,7 +102,7 @@ dependencies:
       - google-auth-oauthlib==1.0.0
       - grpcio==1.54.0
       - h11==0.14.0
-      - hydra-core==1.0.5
+      # - hydra-core==1.0.5
       - imageio==2.21.1
       - importlib-metadata==3.10.1
       - iopath==0.1.10
@@ -134,7 +134,7 @@ dependencies:
       - ninja==1.10.2.3
       - numpy==1.24.2
       - oauthlib==3.2.2
-      - omegaconf==2.0.6
+      # - omegaconf==2.0.6
       - open3d==0.17.0
       - opencv-python-headless==4.7.0.72
       - pandas==2.0.0
@@ -157,7 +157,7 @@ dependencies:
       - pure-eval==0.2.2
       - pyasn1==0.5.0
       - pyasn1-modules==0.3.0
-      - pycocotools==2.0.4
+      # - pycocotools==2.0.4
       - pydantic==1.10.7
       - pydeprecate==0.3.2
       - pygments==2.15.1
@@ -171,7 +171,6 @@ dependencies:
       - pytz==2023.3
       - pyviz3d==0.2.28
       - pywavelets==1.4.1
-      - pyyaml==5.4.1
       - pyzmq==25.0.2
       - qudida==0.0.4
       - regex==2023.3.23
@@ -213,4 +212,5 @@ dependencies:
       - yacs==0.1.8
       - yarl==1.8.2
       - zipp==3.15.0
+      # - pyyaml==5.4.1
 prefix: /opt/conda

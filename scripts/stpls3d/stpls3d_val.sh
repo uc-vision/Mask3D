@@ -24,6 +24,26 @@ model.config.backbone._target_=models.Res16UNet18B \
 data.crop_length=${CURR_SIZE} \
 general.eval_inner_core=50.0
 
+
+
+
+python main_instance_segmentation.py \
+general.experiment_name="stpls3d_validation" \
+general.project_name="stpls3d" \
+data/datasets=stpls3d \
+general.num_targets=15 \
+data.num_labels=15 \
+data.voxel_size=0.333 \
+data.num_workers=10 \
+data.cache_data=true \
+data.cropping_v1=false \
+general.reps_per_epoch=100 \
+model.num_queries=160 \
+general.on_crops=true \
+model.config.backbone._target_=models.Res16UNet18B \
+data.crop_length=54 \
+general.eval_inner_core=50.0
+
 # TEST
 python main_instance_segmentation.py \
 general.experiment_name="validation_query_${CURR_QUERY}_topk_${CURR_TOPK}_dbscan_${CURR_DBSCAN}_size_${CURR_SIZE}" \

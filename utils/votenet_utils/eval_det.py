@@ -107,6 +107,7 @@ def eval_det_cls(
         bbox = np.array(gt[img_id])
         det = [False] * len(bbox)
         npos += len(bbox)
+        # print("len(bbox): ", len(bbox))
         class_recs[img_id] = {"bbox": bbox, "det": det}
     # pad empty list to all other imgids
     for img_id in pred.keys():
@@ -196,6 +197,8 @@ def eval_det(
         prec: {classname: prec_all}
         ap: {classname: scalar}
     """
+    # print("pred_all: ", pred_all)
+    # print("gt_all: ", gt_all)
     pred = {}  # map {classname: pred}
     gt = {}  # map {classname: gt}
     for img_id in pred_all.keys():

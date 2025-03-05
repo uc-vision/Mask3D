@@ -395,6 +395,10 @@ class Custom30M(Res16UNet34):
     PLANES = (32, 64, 128, 256, 128, 64, 64, 32)
 
 
+class Custom(Res16UNet34):
+    PLANES = (16, 32, 64, 128, 128, 64, 48, 48)
+
+
 class Res16UNet34D(Res16UNet34):
     PLANES = (32, 64, 128, 256, 256, 128, 96, 128)
 

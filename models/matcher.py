@@ -113,8 +113,9 @@ class HungarianMatcher(nn.Module):
             out_prob = outputs["pred_logits"][b].softmax(
                 -1
             )  # [num_queries, num_classes]
+            # print("len(targets): ", len(targets))
+            # print("b: ", b)
             tgt_ids = targets[b]["labels"].clone()
-
             # Compute the classification cost. Contrary to the loss, we don't use the NLL,
             # but approximate it in 1 - proba[target class].
             # The 1 is a constant that doesn't change the matching, it can be ommitted.

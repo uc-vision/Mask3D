@@ -1,0 +1,39 @@
+python main_instance_segmentation.py \
+general.experiment_name="scannet_train" \
+general.eval_on_segments=true \
+general.train_on_segments=true \
+trainer.check_val_every_n_epoch=1 \
+general.save_visualizations=true \
+general.visualization_point_size=2
+
+
+
+rescaled_pca.shape:  (164833, 3)
+scaled_pca.shape after get_full_res_mask:  (237360, 3) #1.44
+
+rescaled_pca.shape:  (163498, 3)
+scaled_pca.shape after get_full_res_mask:  (239261, 3) #1.46
+
+rescaled_pca.shape:  (147933, 3)
+scaled_pca.shape after get_full_res_mask:  (217086, 3) #1.47
+
+rescaled_pca.shape:  (92618, 3)
+scaled_pca.shape after get_full_res_mask:  (136769, 3) #1.48
+
+rescaled_pca.shape:  (113280, 3)
+scaled_pca.shape after get_full_res_mask:  (165356, 3) #1.46
+
+rescaled_pca.shape:  (118571, 3)
+scaled_pca.shape after get_full_res_mask:  (173392, 3) #1.46
+
+rescaled_pca.shape:  (114900, 3)
+scaled_pca.shape after get_full_res_mask:  (165720, 3) #1.45
+
+rescaled_pca.shape:  (122421, 3)
+scaled_pca.shape after get_full_res_mask:  (177900, 3) #1.45
+
+rescaled_pca.shape:  (205996, 3)
+scaled_pca.shape after get_full_res_mask:  (293811, 3) #1.42
+
+rescaled_pca.shape:  (195432, 3)
+scaled_pca.shape after get_full_res_mask:  (284801, 3) #1.45

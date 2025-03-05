@@ -31,6 +31,7 @@ from typing import List, Tuple
 import functools
 
 
+
 @functools.lru_cache(20)
 def get_evenly_distributed_colors(
     count: int,
@@ -122,18 +123,20 @@ class InstanceSegmentation(pl.LightningModule):
                 point2segment,
                 raw_coordinates=raw_coordinates,
                 is_eval=is_eval,
-            )
+            )  
+            # x['pred_logits'].shape: [B, num_queries, num_targets]
         return x
 
     def training_step(self, batch, batch_idx):
         data, target, file_names = batch
+        # print("len(target) in training_step: ", len(target))
 
         if data.features.shape[0] > self.config.general.max_batch_size:
             print("data exceeds threshold")
             raise RuntimeError("BATCH TOO BIG")
 
         if len(target) == 0:
-            print("no targets")
+            # print("no targets\n")
             return None
 
         raw_coordinates = None
@@ -146,7 +149,6 @@ class InstanceSegmentation(pl.LightningModule):
             features=data.features,
             device=self.device,
         )
-
         try:
             output = self.forward(
                 data,
@@ -183,10 +185,10 @@ class InstanceSegmentation(pl.LightningModule):
             else:
                 # remove this loss if not specified in `weight_dict`
                 losses.pop(k)
-
         logs = {
             f"train_{k}": v.detach().cpu().item() for k, v in losses.items()
         }
+        # print("loss_ce: ", logs['train_loss_ce'], "; loss_mask: ", logs['train_loss_mask'], "; loss_dice: ", logs['train_loss_dice'])
 
         logs["train_mean_loss_ce"] = statistics.mean(
             [item for item in [v for k, v in logs.items() if "loss_ce" in k]]
@@ -201,6 +203,11 @@ class InstanceSegmentation(pl.LightningModule):
         )
 
         self.log_dict(logs)
+        # self.log('loss_ce', losses['train_loss_ce'], prog_bar=True, on_step=True)
+        # self.log('loss_mask', losses['train_loss_mask'], prog_bar=True, on_step=True)
+        # self.log('loss_dice', losses['train_loss_dice'], prog_bar=True, on_step=True)
+        
+
         return sum(losses.values())
 
     def validation_step(self, batch, batch_idx):
@@ -234,215 +241,32 @@ class InstanceSegmentation(pl.LightningModule):
                     )
 
     def training_epoch_end(self, outputs):
-        train_loss = sum([out["loss"].cpu().item() for out in outputs]) / len(
-            outputs
-        )
-        results = {"train_loss_mean": train_loss}
-        self.log_dict(results)
+        if len(outputs) == 0:
+            pass
+        else:
+            train_loss = sum([out["loss"].cpu().item() for out in outputs]) / len(
+                outputs
+            )
+            results = {"train_loss_mean": train_loss}
+            self.log_dict(results)
 
     def validation_epoch_end(self, outputs):
-        self.test_epoch_end(outputs)
-
-    def save_visualizations(
-        self,
-        target_full,
-        full_res_coords,
-        sorted_masks,
-        sort_classes,
-        file_name,
-        original_colors,
-        original_normals,
-        sort_scores_values,
-        point_size=20,
-        sorted_heatmaps=None,
-        query_pos=None,
-        backbone_features=None,
-    ):
-
-        full_res_coords -= full_res_coords.mean(axis=0)
-
-        gt_pcd_pos = []
-        gt_pcd_normals = []
-        gt_pcd_color = []
-        gt_inst_pcd_color = []
-        gt_boxes = []
-
-        if "labels" in target_full:
-            instances_colors = torch.from_numpy(
-                np.vstack(
-                    get_evenly_distributed_colors(
-                        target_full["labels"].shape[0]
-                    )
-                )
-            )
-            for instance_counter, (label, mask) in enumerate(
-                zip(target_full["labels"], target_full["masks"])
-            ):
-                if label == 255:
-                    continue
-
-                mask_tmp = mask.detach().cpu().numpy()
-                mask_coords = full_res_coords[mask_tmp.astype(bool), :]
-
-                if len(mask_coords) == 0:
-                    continue
-
-                gt_pcd_pos.append(mask_coords)
-                mask_coords_min = full_res_coords[
-                    mask_tmp.astype(bool), :
-                ].min(axis=0)
-                mask_coords_max = full_res_coords[
-                    mask_tmp.astype(bool), :
-                ].max(axis=0)
-                size = mask_coords_max - mask_coords_min
-                mask_coords_middle = mask_coords_min + size / 2
-
-                gt_boxes.append(
-                    {
-                        "position": mask_coords_middle,
-                        "size": size,
-                        "color": self.validation_dataset.map2color([label])[0],
-                    }
-                )
-
-                gt_pcd_color.append(
-                    self.validation_dataset.map2color([label]).repeat(
-                        gt_pcd_pos[-1].shape[0], 1
-                    )
-                )
-                gt_inst_pcd_color.append(
-                    instances_colors[instance_counter % len(instances_colors)]
-                    .unsqueeze(0)
-                    .repeat(gt_pcd_pos[-1].shape[0], 1)
-                )
-
-                gt_pcd_normals.append(
-                    original_normals[mask_tmp.astype(bool), :]
-                )
-
-            gt_pcd_pos = np.concatenate(gt_pcd_pos)
-            gt_pcd_normals = np.concatenate(gt_pcd_normals)
-            gt_pcd_color = np.concatenate(gt_pcd_color)
-            gt_inst_pcd_color = np.concatenate(gt_inst_pcd_color)
-
-        v = vis.Visualizer()
-
-        v.add_points(
-            "RGB Input",
-            full_res_coords,
-            colors=original_colors,
-            normals=original_normals,
-            visible=True,
-            point_size=point_size,
-        )
-
-        if backbone_features is not None:
-            v.add_points(
-                "PCA",
-                full_res_coords,
-                colors=backbone_features,
-                normals=original_normals,
-                visible=False,
-                point_size=point_size,
-            )
-
-        if "labels" in target_full:
-            v.add_points(
-                "Semantics (GT)",
-                gt_pcd_pos,
-                colors=gt_pcd_color,
-                normals=gt_pcd_normals,
-                alpha=0.8,
-                visible=False,
-                point_size=point_size,
-            )
-            v.add_points(
-                "Instances (GT)",
-                gt_pcd_pos,
-                colors=gt_inst_pcd_color,
-                normals=gt_pcd_normals,
-                alpha=0.8,
-                visible=False,
-                point_size=point_size,
-            )
-
-        pred_coords = []
-        pred_normals = []
-        pred_sem_color = []
-        pred_inst_color = []
-
-        for did in range(len(sorted_masks)):
-            instances_colors = torch.from_numpy(
-                np.vstack(
-                    get_evenly_distributed_colors(
-                        max(1, sorted_masks[did].shape[1])
-                    )
-                )
-            )
-
-            for i in reversed(range(sorted_masks[did].shape[1])):
-                coords = full_res_coords[
-                    sorted_masks[did][:, i].astype(bool), :
-                ]
-
-                mask_coords = full_res_coords[
-                    sorted_masks[did][:, i].astype(bool), :
-                ]
-                mask_normals = original_normals[
-                    sorted_masks[did][:, i].astype(bool), :
-                ]
-
-                label = sort_classes[did][i]
-
-                if len(mask_coords) == 0:
-                    continue
-
-                pred_coords.append(mask_coords)
-                pred_normals.append(mask_normals)
-
-                pred_sem_color.append(
-                    self.validation_dataset.map2color([label]).repeat(
-                        mask_coords.shape[0], 1
-                    )
-                )
-
-                pred_inst_color.append(
-                    instances_colors[i % len(instances_colors)]
-                    .unsqueeze(0)
-                    .repeat(mask_coords.shape[0], 1)
-                )
-
-            if len(pred_coords) > 0:
-                pred_coords = np.concatenate(pred_coords)
-                pred_normals = np.concatenate(pred_normals)
-                pred_sem_color = np.concatenate(pred_sem_color)
-                pred_inst_color = np.concatenate(pred_inst_color)
-
-                v.add_points(
-                    "Semantics (Mask3D)",
-                    pred_coords,
-                    colors=pred_sem_color,
-                    normals=pred_normals,
-                    visible=False,
-                    alpha=0.8,
-                    point_size=point_size,
-                )
-                v.add_points(
-                    "Instances (Mask3D)",
-                    pred_coords,
-                    colors=pred_inst_color,
-                    normals=pred_normals,
-                    visible=False,
-                    alpha=0.8,
-                    point_size=point_size,
-                )
-
-        v.save(
-            f"{self.config['general']['save_dir']}/visualizations/{file_name}"
-        )
+        if len(outputs) == 0:
+            pass
+        else: 
+            self.test_epoch_end(outputs)
 
     def eval_step(self, batch, batch_idx):
         data, target, file_names = batch
+        # print("check file_names and number of points: ", file_names[0], data.original_colors[0].shape)
+
+
+        if len(target) == 0:
+            # print("no targets\n")
+            return None
+        
+        # print("len(target) in eval_step: ", len(target))
+
         inverse_maps = data.inverse_maps
         target_full = data.target_full
         original_colors = data.original_colors
@@ -475,11 +299,12 @@ class InstanceSegmentation(pl.LightningModule):
             output = self.forward(
                 data,
                 point2segment=[
-                    target[i]["point2segment"] for i in range(len(target))
+                    target[i]["point2segment"] for i in range(len(target)) if target[i]
                 ],
                 raw_coordinates=raw_coordinates,
                 is_eval=True,
             )
+            # output['pred_logits'].shape: [1, num_queries, num_targets]
         except RuntimeError as run_err:
             print(run_err)
             if (
@@ -518,9 +343,11 @@ class InstanceSegmentation(pl.LightningModule):
                 torch.use_deterministic_algorithms(True)
 
         if self.config.general.save_visualizations:
+            # print("type(output['backbone_features']): ", type(output["backbone_features"]))
             backbone_features = (
                 output["backbone_features"].F.detach().cpu().numpy()
             )
+            # print(type(backbone_features))
             from sklearn import decomposition
 
             pca = decomposition.PCA(n_components=3)
@@ -531,9 +358,12 @@ class InstanceSegmentation(pl.LightningModule):
                 * (pca_features - pca_features.min())
                 / (pca_features.max() - pca_features.min())
             )
+            # print("rescaled_pca.shape: ", rescaled_pca.shape)
+            # print("rescaled_pca: ", rescaled_pca)
+
 
         self.eval_instance_step(
-            output,
+            output,   # output['pred_logits'].shape: [B, num_queries, num_targets]
             target,
             target_full,
             inverse_maps,
@@ -547,7 +377,7 @@ class InstanceSegmentation(pl.LightningModule):
             if self.config.general.save_visualizations
             else None,
         )
-
+        
         if self.config.data.test_mode != "test":
             return {
                 f"val_{k}": v.detach().cpu().item() for k, v in losses.items()
@@ -587,6 +417,7 @@ class InstanceSegmentation(pl.LightningModule):
         )
 
         if self.config.general.topk_per_image != -1:
+            # print("mask_cls.shape: ", mask_cls.shape)
             scores_per_query, topk_indices = mask_cls.flatten(0, 1).topk(
                 self.config.general.topk_per_image, sorted=True
             )
@@ -596,7 +427,11 @@ class InstanceSegmentation(pl.LightningModule):
             )
 
         labels_per_query = labels[topk_indices]
-        topk_indices = topk_indices // num_classes
+        # topk_indices = topk_indices // num_classes
+        topk_indices = torch.div(topk_indices, num_classes, rounding_mode='floor')
+        # print("topk_indices: ", topk_indices // num_classes)
+        # print(torch.div(topk_indices, num_classes, rounding_mode='trunc'))
+        # print(torch.div(topk_indices, num_classes, rounding_mode='floor'))
         mask_pred = mask_pred[:, topk_indices]
 
         result_pred_mask = (mask_pred > 0).float()
@@ -625,6 +460,7 @@ class InstanceSegmentation(pl.LightningModule):
         first_full_res=False,
         backbone_features=None,
     ):
+        # print("check file_names and number of points: ", file_names[0], original_colors[0].shape)
         label_offset = self.validation_dataset.label_offset
         prediction = output["aux_outputs"]
         prediction.append(
@@ -633,6 +469,8 @@ class InstanceSegmentation(pl.LightningModule):
                 "pred_masks": output["pred_masks"],
             }
         )
+        # output['pred_logits'].shape:  torch.Size([1, num_queries, num_targets])
+        # prediction[-1]['pred_logits'].shape:  torch.Size([1, num_queries, num_targets])
 
         prediction[self.decoder_id][
             "pred_logits"
@@ -641,6 +479,7 @@ class InstanceSegmentation(pl.LightningModule):
         )[
             ..., :-1
         ]
+        # prediction[-1]['pred_logits'].shape: [1, num_queries, num_targets - 1]
 
         all_pred_classes = list()
         all_pred_masks = list()
@@ -648,7 +487,9 @@ class InstanceSegmentation(pl.LightningModule):
         all_heatmaps = list()
         all_query_pos = list()
 
-        offset_coords_idx = 0
+        offset_coords_idx = 0 
+
+        coords = []
         for bid in range(len(prediction[self.decoder_id]["pred_masks"])):
             if not first_full_res:
                 if self.model.train_on_segments:
@@ -657,12 +498,25 @@ class InstanceSegmentation(pl.LightningModule):
                         .detach()
                         .cpu()[target_low_res[bid]["point2segment"].cpu()]
                     )
+                    # print(f"mask[{bid}].shape: ", masks.shape)
+                    # print(f"mask[{bid}]: ", masks)
+                    # print(torch.any(masks[bid] > 0))
                 else:
                     masks = (
                         prediction[self.decoder_id]["pred_masks"][bid]
                         .detach()
                         .cpu()
                     )
+                    # print(f"mask[{bid}].shape: ", masks.shape)
+                    # print(f"mask[{bid}]: ", masks)
+                    # print(torch.any(masks[bid] > 0))
+
+                curr_coords_idx = masks.shape[0]
+                curr_coords = raw_coords[
+                    offset_coords_idx : curr_coords_idx + offset_coords_idx
+                ]
+                offset_coords_idx += curr_coords_idx
+                coords.append(curr_coords)
 
                 if self.config.general.use_dbscan:
                     new_preds = {
@@ -670,11 +524,11 @@ class InstanceSegmentation(pl.LightningModule):
                         "pred_logits": list(),
                     }
 
-                    curr_coords_idx = masks.shape[0]
-                    curr_coords = raw_coords[
-                        offset_coords_idx : curr_coords_idx + offset_coords_idx
-                    ]
-                    offset_coords_idx += curr_coords_idx
+                    # curr_coords_idx = masks.shape[0]
+                    # curr_coords = raw_coords[
+                    #     offset_coords_idx : curr_coords_idx + offset_coords_idx
+                    # ]
+                    # offset_coords_idx += curr_coords_idx
 
                     for curr_query in range(masks.shape[1]):
                         curr_masks = masks[:, curr_query] > 0
@@ -725,7 +579,10 @@ class InstanceSegmentation(pl.LightningModule):
                         ],
                         self.model.num_classes - 1,
                     )
+                    # print("masks.shape after get_mask_and_scores: ", masks.shape)
+                    # print("masks after get_mask_and_scores: ", masks)
 
+                # print("classes: ", classes)
                 masks = self.get_full_res_mask(
                     masks,
                     inverse_maps[bid],
@@ -740,6 +597,7 @@ class InstanceSegmentation(pl.LightningModule):
                 )
 
                 if backbone_features is not None:
+                    # print("backbone_features.shape: ", backbone_features.shape)
                     backbone_features = self.get_full_res_mask(
                         torch.from_numpy(backbone_features),
                         inverse_maps[bid],
@@ -747,6 +605,7 @@ class InstanceSegmentation(pl.LightningModule):
                         is_heatmap=True,
                     )
                     backbone_features = backbone_features.numpy()
+                    # print("scaled_pca.shape after get_full_res_mask: ", backbone_features.shape)
             else:
                 assert False, "not tested"
                 masks = self.get_full_res_mask(
@@ -770,6 +629,7 @@ class InstanceSegmentation(pl.LightningModule):
             sort_scores_index = sort_scores.indices.cpu().numpy()
             sort_scores_values = sort_scores.values.cpu().numpy()
             sort_classes = classes[sort_scores_index]
+            # print("sort_classes: ", sort_classes)
 
             sorted_masks = masks[:, sort_scores_index]
             sorted_heatmap = heatmap[:, sort_scores_index]
@@ -813,20 +673,28 @@ class InstanceSegmentation(pl.LightningModule):
                 all_pred_scores.append(sort_scores_values)
                 all_heatmaps.append(sorted_heatmap)
 
-        if self.validation_dataset.dataset_name == "scannet200":
+        # print("coords: ", coords[0][:21, :])
+        # print(len(coords[0]))
+        # print("original_coordinates: ", full_res_coords[0][:21, :])
+        # print(len(full_res_coords[0]))
+        if self.validation_dataset.dataset_name == "scannet200": #?????
             all_pred_classes[bid][all_pred_classes[bid] == 0] = -1
             if self.config.data.test_mode != "test":
                 target_full_res[bid]["labels"][
                     target_full_res[bid]["labels"] == 0
-                ] = -1
+                ] = -1 
 
+        # print("len(prediction[self.decoder_id]['pred_masks']): ", len(prediction[self.decoder_id]["pred_masks"]))
         for bid in range(len(prediction[self.decoder_id]["pred_masks"])):
+            # print(f"all_pred_classes[{bid}] before remapped: ", all_pred_classes[bid])
+            # print("bid: ", bid)
             all_pred_classes[
                 bid
             ] = self.validation_dataset._remap_model_output(
                 all_pred_classes[bid].cpu() + label_offset
             )
-
+            # print(f"all_pred_classes[{bid}]: ", all_pred_classes[bid])
+            # print("len(target_full_res): ", len(target_full_res))
             if (
                 self.config.data.test_mode != "test"
                 and len(target_full_res) != 0
@@ -836,6 +704,8 @@ class InstanceSegmentation(pl.LightningModule):
                 ] = self.validation_dataset._remap_model_output(
                     target_full_res[bid]["labels"].cpu() + label_offset
                 )
+
+                # print(f"target_full_res[{bid}]: ", target_full_res[bid])
 
                 # PREDICTION BOX
                 bbox_data = []
@@ -860,6 +730,7 @@ class InstanceSegmentation(pl.LightningModule):
                                 all_pred_scores[bid][query_id],
                             )
                         )
+                # print("bbox_data: ", bbox_data)
                 self.bbox_preds[file_names[bid]] = bbox_data
 
                 # GT BOX
@@ -883,6 +754,7 @@ class InstanceSegmentation(pl.LightningModule):
                         ) - obj_coords.min(axis=0)
 
                         bbox = np.concatenate((obj_center, obj_axis_length))
+                        # print("bbox.shape: ", bbox.shape)
                         bbox_data.append(
                             (
                                 target_full_res[bid]["labels"][obj_id].item(),
@@ -898,6 +770,8 @@ class InstanceSegmentation(pl.LightningModule):
                     "pred_scores": all_pred_scores[bid],
                     "pred_classes": all_pred_classes[bid],
                 }
+                # print("file_names[bid]: ", file_names[bid])
+                # print("pred_masks.shape: ", all_pred_masks[bid].shape)
             else:
                 # prev val_dataset
                 self.preds[file_names[bid]] = {
@@ -914,6 +788,8 @@ class InstanceSegmentation(pl.LightningModule):
                         "masks"
                     ][:, self.test_dataset.data[idx[bid]]["cond_inner"]]
                     self.save_visualizations(
+                        coords[bid],
+                        target_low_res[bid],
                         target_full_res[bid],
                         full_res_coords[bid][
                             self.test_dataset.data[idx[bid]]["cond_inner"]
@@ -945,6 +821,8 @@ class InstanceSegmentation(pl.LightningModule):
                     )
                 else:
                     self.save_visualizations(
+                        coords[bid],
+                        target_low_res[bid],
                         target_full_res[bid],
                         full_res_coords[bid],
                         [self.preds[file_names[bid]]["pred_masks"]],
@@ -985,11 +863,14 @@ class InstanceSegmentation(pl.LightningModule):
                         self.decoder_id,
                     )
 
-    def eval_instance_epoch_end(self):
+    def eval_instance_epoch_end(self, outputs):
+
         log_prefix = f"val"
         ap_results = {}
 
         head_results, tail_results, common_results = [], [], []
+        # print("self.bbox_preds: ", self.bbox_preds)
+        # print("self.bbox_gt: ", self.bbox_gt)
 
         box_ap_50 = eval_det(
             self.bbox_preds, self.bbox_gt, ovthresh=0.5, use_07_metric=False
@@ -997,6 +878,8 @@ class InstanceSegmentation(pl.LightningModule):
         box_ap_25 = eval_det(
             self.bbox_preds, self.bbox_gt, ovthresh=0.25, use_07_metric=False
         )
+        # print("box_ap_25: ", box_ap_25)
+        # print("box_ap_25[-1].keys(): ", box_ap_25[-1].keys())
         mean_box_ap_25 = sum([v for k, v in box_ap_25[-1].items()]) / len(
             box_ap_25[-1].keys()
         )
@@ -1026,6 +909,8 @@ class InstanceSegmentation(pl.LightningModule):
             "scannet",
             "stpls3d",
             "scannet200",
+            "splat",
+            "experiment"
         ]:
             gt_data_path = f"{self.validation_dataset.data_dir[0]}/instance_gt/{self.validation_dataset.mode}"
         else:
@@ -1055,7 +940,6 @@ class InstanceSegmentation(pl.LightningModule):
                 ap_results[f"{log_prefix}_mean_precision"] = mprec
                 ap_results[f"{log_prefix}_mean_recall"] = mrec
             elif self.validation_dataset.dataset_name == "stpls3d":
-                new_preds = {}
                 for key in self.preds.keys():
                     new_preds[key.replace(".txt", "")] = {
                         "pred_classes": self.preds[key]["pred_classes"],
@@ -1064,6 +948,20 @@ class InstanceSegmentation(pl.LightningModule):
                     }
 
                 evaluate(new_preds, gt_data_path, pred_path, dataset="stpls3d")
+            elif self.validation_dataset.dataset_name == "splat":
+                new_preds = {}
+                for key in self.preds.keys():
+                    # print("len(self.preds): ", len(self.preds))
+                    # print(self.preds[key]["pred_masks"].shape)
+                    # print(self.preds[key]["pred_scores"].shape)
+                    # print(self.preds[key]["pred_classes"].shape)
+                    new_preds[key.replace(".txt", "")] = {
+                        "pred_classes": self.preds[key]["pred_classes"],
+                        "pred_masks": self.preds[key]["pred_masks"],
+                        "pred_scores": self.preds[key]["pred_scores"],
+                    }
+
+                evaluate(new_preds, gt_data_path, pred_path, dataset="splat")
             else:
                 evaluate(
                     self.preds,
@@ -1229,7 +1127,7 @@ class InstanceSegmentation(pl.LightningModule):
         if self.config.general.export:
             return
 
-        self.eval_instance_epoch_end()
+        self.eval_instance_epoch_end(outputs)
 
         dd = defaultdict(list)
         for output in outputs:
@@ -1249,6 +1147,272 @@ class InstanceSegmentation(pl.LightningModule):
         )
 
         self.log_dict(dd)
+
+    def save_visualizations(
+        self,
+        coords,
+        target,
+        target_full,
+        full_res_coords,
+        sorted_masks,
+        sort_classes,
+        file_name,
+        original_colors,
+        original_normals,
+        sort_scores_values,
+        point_size=0.1,
+        sorted_heatmaps=None,
+        query_pos=None,
+        backbone_features=None,
+    ):
+        # print("sorted_masks: ", np.any(sorted_masks[0]))
+
+        # full_res_coords -= full_res_coords.mean(axis=0)
+        full_res_coords_mean = full_res_coords.mean(axis=0)
+        full_res_coords -= full_res_coords_mean
+        coords -= full_res_coords_mean
+
+        gt_pcd_pos = []
+        gt_pcd_normals = []
+        gt_pcd_color = []
+        gt_inst_pcd_color = []
+        gt_boxes = []
+        voxelized_gt_pcd_pos = []
+
+        if "labels" in target_full:
+            instances_colors = torch.from_numpy(
+                np.vstack(
+                    get_evenly_distributed_colors(
+                        target_full["labels"].shape[0]
+                    )
+                )
+            )
+            for instance_counter, (label, mask) in enumerate(
+                zip(target_full["labels"], target_full["masks"])
+            ):
+                if label == 255:
+                    continue
+
+                mask_tmp = mask.detach().cpu().numpy()
+                mask_coords = full_res_coords[mask_tmp.astype(bool), :]
+
+                if len(mask_coords) == 0:
+                    continue
+
+                gt_pcd_pos.append(mask_coords)
+                mask_coords_min = full_res_coords[
+                    mask_tmp.astype(bool), :
+                ].min(axis=0)
+                mask_coords_max = full_res_coords[
+                    mask_tmp.astype(bool), :
+                ].max(axis=0)
+                size = mask_coords_max - mask_coords_min
+                mask_coords_middle = mask_coords_min + size / 2
+
+                gt_boxes.append(
+                    {
+                        "position": mask_coords_middle,
+                        "size": size,
+                        "color": self.validation_dataset.map2color([label])[0],
+                    }
+                )
+
+                gt_pcd_color.append(
+                    self.validation_dataset.map2color([label]).repeat(
+                        gt_pcd_pos[-1].shape[0], 1
+                    )
+                )
+                gt_inst_pcd_color.append(
+                    instances_colors[instance_counter % len(instances_colors)]
+                    .unsqueeze(0)
+                    .repeat(gt_pcd_pos[-1].shape[0], 1)
+                )
+
+                gt_pcd_normals.append(
+                    original_normals[mask_tmp.astype(bool), :]
+                )
+
+            gt_pcd_pos = np.concatenate(gt_pcd_pos)
+            gt_pcd_normals = np.concatenate(gt_pcd_normals)
+            gt_pcd_color = np.concatenate(gt_pcd_color)
+            gt_inst_pcd_color = np.concatenate(gt_inst_pcd_color)
+
+        if "labels" in target:
+            for label, mask in zip(target["labels"], target["masks"]):
+                if label == 255:
+                    continue
+                mask_tmp = mask.detach().cpu().numpy()
+                mask_coords = coords[mask_tmp.astype(bool), :]
+                # print("mask_coords.shape: ", mask_coords.shape)
+
+                if len(mask_coords) == 0:
+                    continue
+
+                voxelized_gt_pcd_pos.append(mask_coords)
+
+            voxelized_gt_pcd_pos = np.concatenate(voxelized_gt_pcd_pos)
+
+        v = vis.Visualizer()
+
+        v.add_points(
+            "RGB Input",
+            full_res_coords,
+            colors=original_colors,
+            normals=original_normals,
+            visible=True,
+            point_size=2,
+        )
+
+        # print("coords_in_visualizer: ", coords[:21, :])
+        # print(len(coords))
+        # print("original_coordinates_in_visualizer: ", full_res_coords[:21, :])
+        # print(len(full_res_coords))
+
+        v.add_lines(
+            "Normals",
+            full_res_coords,
+            full_res_coords + original_normals/400.0,
+            visible=False,
+        )
+
+        v.add_points(
+            "Voxelized Points",
+            coords.cpu().numpy(),
+            colors = np.full((coords.shape[0], 3), [255, 0, 0]),
+            normals=np.ones_like(coords),
+            visible=False,
+            point_size=1,
+        )
+
+
+        if backbone_features is not None:
+            # print("backbone_features: ", backbone_features.shape)
+            # print("full_res_coords: ", full_res_coords.shape)
+            v.add_points(
+                "PCA",
+                full_res_coords,
+                colors=backbone_features,
+                normals=original_normals,
+                visible=False,
+                point_size=point_size,
+            )
+
+        if "labels" in target_full:
+            v.add_points(
+                "Semantics (GT)",
+                gt_pcd_pos,
+                colors=gt_pcd_color,
+                normals=gt_pcd_normals,
+                alpha=0.8,
+                visible=False,
+                point_size=point_size,
+            )
+            v.add_points(
+                "Instances (GT)",
+                gt_pcd_pos,
+                colors=gt_inst_pcd_color,
+                normals=gt_pcd_normals,
+                alpha=0.8,
+                visible=False,
+                point_size=point_size,
+            )
+            v.add_lines(
+                "Normals (GT)",
+                gt_pcd_pos,
+                gt_pcd_pos + gt_pcd_normals/400.0,
+                visible=False,
+            )
+
+        if "labels" in target:
+            # print("voxelized_gt_pcd_pos.shape: ", voxelized_gt_pcd_pos.shape)
+            v.add_points(
+                "Voxelized Semantics",
+                voxelized_gt_pcd_pos,
+                colors = np.full((voxelized_gt_pcd_pos.shape[0], 3), [255, 255, 0]),
+                normals=np.ones_like(voxelized_gt_pcd_pos),
+                alpha=0.8,
+                visible=False,
+                point_size=2,
+            )
+
+        pred_coords = []
+        pred_normals = []
+        pred_sem_color = []
+        pred_inst_color = []
+
+        for did in range(len(sorted_masks)):
+            # print("sorted_masks.size: ", len(sorted_masks))
+            # print("sorted_masks[0].shape: ", sorted_masks[0].shape)
+            instances_colors = torch.from_numpy(
+                np.vstack(
+                    get_evenly_distributed_colors(
+                        max(1, sorted_masks[did].shape[1])
+                    )
+                )
+            )
+
+            for i in reversed(range(sorted_masks[did].shape[1])):
+                coords = full_res_coords[
+                    sorted_masks[did][:, i].astype(bool), :
+                ]
+
+                mask_coords = full_res_coords[
+                    sorted_masks[did][:, i].astype(bool), :
+                ]
+                mask_normals = original_normals[
+                    sorted_masks[did][:, i].astype(bool), :
+                ]
+
+                label = sort_classes[did][i]
+
+                # print("len(mask_coords): ", len(mask_coords))
+                if len(mask_coords) == 0:
+                    continue
+
+                pred_coords.append(mask_coords)
+                pred_normals.append(mask_normals)
+
+                pred_sem_color.append(
+                    self.validation_dataset.map2color([label]).repeat(
+                        mask_coords.shape[0], 1
+                    )
+                )
+
+                pred_inst_color.append(
+                    instances_colors[i % len(instances_colors)]
+                    .unsqueeze(0)
+                    .repeat(mask_coords.shape[0], 1)
+                )
+
+            # print("len(pred_coords): ", len(pred_coords))
+            if len(pred_coords) > 0:
+                pred_coords = np.concatenate(pred_coords)
+                pred_normals = np.concatenate(pred_normals)
+                pred_sem_color = np.concatenate(pred_sem_color)
+                pred_inst_color = np.concatenate(pred_inst_color)
+
+                v.add_points(
+                    "Semantics (Mask3D)",
+                    pred_coords,
+                    colors=pred_sem_color,
+                    normals=pred_normals,
+                    visible=False,
+                    alpha=0.8,
+                    point_size=point_size,
+                )
+                v.add_points(
+                    "Instances (Mask3D)",
+                    pred_coords,
+                    colors=pred_inst_color,
+                    normals=pred_normals,
+                    visible=False,
+                    alpha=0.8,
+                    point_size=point_size,
+                )
+
+        v.save(
+            f"{self.config['general']['save_dir']}/visualizations/{file_name}"
+        )
 
     def configure_optimizers(self):
         optimizer = hydra.utils.instantiate(

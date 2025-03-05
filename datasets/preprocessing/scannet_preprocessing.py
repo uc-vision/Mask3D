@@ -15,6 +15,8 @@ from datasets.scannet200.scannet200_constants import (
     CLASS_LABELS_200,
 )
 
+import os
+
 
 class ScannetPreprocessing(BasePreprocessing):
     def __init__(
@@ -27,7 +29,6 @@ class ScannetPreprocessing(BasePreprocessing):
         scannet200: bool = False,
     ):
         super().__init__(data_dir, save_dir, modes, n_jobs)
-
         self.scannet200 = scannet200
 
         if self.scannet200:
@@ -61,6 +62,7 @@ class ScannetPreprocessing(BasePreprocessing):
 
     def create_label_database(self, git_repo):
         if self.scannet200:
+            print(type(self.scannet200))
             label_database = {}
             for row_id, class_id in enumerate(VALID_CLASS_IDS_200):
                 label_database[class_id] = {
@@ -87,7 +89,9 @@ class ScannetPreprocessing(BasePreprocessing):
                 .rename(columns={"nyu40class": "name"})
                 .replace(" ", "_", regex=True)
             )
-            df = pd.DataFrame([{"name": "empty"}]).append(df)
+            empty_df = pd.DataFrame([{"name": "empty"}])
+            df = pd.concat([empty_df, df])
+            # df = pd.DataFrame([{"name": "empty"}]).append(df)
             df["validation"] = False
 
             with open(
@@ -126,6 +130,7 @@ class ScannetPreprocessing(BasePreprocessing):
         Returns:
             filebase: info about file
         """
+
         scene, sub_scene = self._parse_scene_subscene(filepath.name)
         filebase = {
             "filepath": filepath,
@@ -203,7 +208,7 @@ class ScannetPreprocessing(BasePreprocessing):
             # gt_data = (points[:, -2] + 1) * 1000 + points[:, -1] + 1
             gt_data = points[:, -2] * 1000 + points[:, -1] + 1
         else:
-            segments_test = "../../data/raw/scannet_test_segments"
+            segments_test = "./data/raw/scannet_test_segments"
             segment_indexes_filepath = filepath.name.replace(
                 ".ply", ".0.010000.segs.json"
             )

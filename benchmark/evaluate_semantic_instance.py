@@ -467,6 +467,21 @@ def evaluate(
     global LABEL_TO_ID
     global opt
 
+    if dataset == "splat" or "experiment":
+
+        CLASS_LABELS = [
+            "fruit",
+        ]
+        VALID_CLASS_IDS = np.array(
+            [1]
+        )
+
+        ID_TO_LABEL = {}
+        LABEL_TO_ID = {}
+        for i in range(len(VALID_CLASS_IDS)):
+            LABEL_TO_ID[CLASS_LABELS[i]] = VALID_CLASS_IDS[i]
+            ID_TO_LABEL[VALID_CLASS_IDS[i]] = CLASS_LABELS[i]
+
     if dataset == "stpls3d":
         # global CLASS_LABELS
         # global VALID_CLASS_IDS

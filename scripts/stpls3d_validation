@@ -1,0 +1,26 @@
+python main_instance_segmentation.py \
+general.experiment_name="stpls3d_validation" \
+general.project_name="stpls3d" \
+data/datasets=stpls3d \
+general.num_targets=15 \
+data.num_labels=15 \
+data.voxel_size=0.333 \
+data.num_workers=10 \
+data.cache_data=true \
+data.cropping_v1=false \
+general.reps_per_epoch=100 \
+model.num_queries=160 \
+general.on_crops=true \
+model.config.backbone._target_=models.Res16UNet18B \
+data.crop_length=54 \
+general.eval_inner_core=50.0 \
+general.save_visualizations=true \
+trainer.check_val_every_n_epoch=1
+
+
+
+rescaled_pca.shape:  (47761, 3)
+scaled_pca.shape after get_full_res_mask:  (52255, 3) # 1.09
+
+rescaled_pca.shape:  (34992, 3)
+scaled_pca.shape after get_full_res_mask:  (38142, 3) # 1.09

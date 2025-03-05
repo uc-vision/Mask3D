@@ -234,13 +234,19 @@ class Mask3D(nn.Module):
     def forward(
         self, x, point2segment=None, raw_coordinates=None, is_eval=False
     ):
+        # print("input_features shape:", x.features.shape)  # Should print [N, 6]
+        # print("coordinates shape:", x.coordinates.shape)  # Should print [N, 4]
         pcd_features, aux = self.backbone(x)
 
         batch_size = len(x.decomposed_coordinates)
 
         with torch.no_grad():
+            # print("x.coordinates[:, 1:]", x.coordinates[:, 1:])
+            # print("raw_coordinates", raw_coordinates)
+            # print("number of points: ", x.coordinates.shape[0])
             coordinates = me.SparseTensor(
                 features=raw_coordinates,
+                # features=x.coordinates[:, 1:],
                 coordinate_manager=aux[-1].coordinate_manager,
                 coordinate_map_key=aux[-1].coordinate_map_key,
                 device=aux[-1].device,
@@ -478,6 +484,9 @@ class Mask3D(nn.Module):
                 if self.use_level_embed:
                     src_pcd += self.level_embed.weight[i]
 
+                # print("queries.shape: ", queries.shape)
+                # print("src_pcd.shape: ", src_pcd.shape)
+
                 output = self.cross_attention[decoder_counter][i](
                     queries.permute((1, 0, 2)),
                     src_pcd,
@@ -528,7 +537,7 @@ class Mask3D(nn.Module):
         predictions_mask.append(outputs_mask)
 
         return {
-            "pred_logits": predictions_class[-1],
+            "pred_logits": predictions_class[-1], # predictions_class[-1].shape: [B, num_queries, num_targets]
             "pred_masks": predictions_mask[-1],
             "aux_outputs": self._set_aux_loss(
                 predictions_class, predictions_mask
@@ -538,6 +547,7 @@ class Mask3D(nn.Module):
             else None,
             "backbone_features": pcd_features,
         }
+
 
     def mask_module(
         self,
@@ -558,15 +568,21 @@ class Mask3D(nn.Module):
         if point2segment is not None:
             output_segments = []
             for i in range(len(mask_segments)):
+                # print(f"mask_segments[{i}]", mask_segments[i])
+                # print(f"mask_embed[{i}]", mask_embed[i])
                 output_segments.append(mask_segments[i] @ mask_embed[i].T)
                 output_masks.append(output_segments[-1][point2segment[i]])
         else:
             for i in range(mask_features.C[-1, 0] + 1):
+                # print(f"mask_features.decomposed_features[{i}]", mask_features.decomposed_features[i])
+                # print(f"mask_embed[{i}]", mask_embed[i])
                 output_masks.append(
                     mask_features.decomposed_features[i] @ mask_embed[i].T
                 )
 
         output_masks = torch.cat(output_masks)
+        # print("output_masks.shape: ", output_masks.shape)
+        # print("output_masks: ", output_masks)
         outputs_mask = me.SparseTensor(
             features=output_masks,
             coordinate_manager=mask_features.coordinate_manager,
@@ -594,8 +610,18 @@ class Mask3D(nn.Module):
                 )
 
         if point2segment is not None:
+            for bid in range(len(output_segments)):
+                masks = output_segments[bid]
+                # print(f"mask[{bid}].shape in mask_module: ", masks.shape)
+                # print(f"mask[{bid}] in mask_module: ", masks)
+                # print(torch.any(masks[bid] > 0))
             return outputs_class, output_segments
         else:
+            for bid in range(len(outputs_mask.decomposed_features)):
+                masks = outputs_mask.decomposed_features[bid]
+                # print(f"mask[{bid}].shape in mask_module: ", masks.shape)
+                # print(f"mask[{bid}] in mask_module: ", masks)
+                # print(torch.any(masks[bid] > 0))
             return outputs_class, outputs_mask.decomposed_features
 
     @torch.jit.unused
